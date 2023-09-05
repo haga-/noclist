@@ -18,7 +18,7 @@ class Client
   end
 
   def get_users(token)
-    response = @http.request_get(
+    response = retryable_get(
       '/users',
       { 'X-Request-Checksum' => Digest::SHA256.hexdigest("#{token}/users") }
     )
@@ -27,15 +27,15 @@ class Client
 
   private
 
-  def retryable_get(path)
+  def retryable_get(path, headers = {})
     @retry_count ||= 0
-    response = @http.request_get(path)
+    response = @http.request_get(path, headers)
     raise Client::Error.new(response, path) if response.code != '200'
     response
   rescue StandardError => e
     @retry_count += 1
     if @retry_count < 3
-      retryable_get(path)
+      retryable_get(path, headers)
     else
       @retry_count = nil
       raise e
