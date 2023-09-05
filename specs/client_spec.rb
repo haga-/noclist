@@ -6,14 +6,58 @@ describe Client do
   let(:client) { Client.new }
 
   describe '#get_auth_token' do
-    it 'returns the authentication token from the server response' do
-      token = '67723F81-4206-BE4C-308C-2F749101B124'
-      # API returns useless data in the response body, we only care about the header
-      stub_request(:get, 'localhost:8888/auth').to_return(body: 'B29607BE4B3A4325773076AB7945BD51', headers: { 'Badsec-Authentication-Token' => token })
+    let(:token) { '67723F81-4206-BE4C-308C-2F749101B124' }
+    context "when API doesn't raise any errors" do
+      it 'returns the authentication token from the server response' do
+        # API returns useless data in the response body, we only care about the header
+        stub_request(:get, 'localhost:8888/auth').to_return(body: 'B29607BE4B3A4325773076AB7945BD51', headers: { 'Badsec-Authentication-Token' => token })
 
-      auth_token = client.get_auth_token
+        auth_token = client.get_auth_token
 
-      expect(auth_token).to eq(token)
+        expect(auth_token).to eq(token)
+      end
+    end
+
+    context "when API raises one error but succeeds on the next retry" do
+      it 'returns the authentication token from the server response' do
+        stub_request(:get, 'localhost:8888/auth')
+          .to_return(
+            { status: 500, body: 'Internal Server Error' },
+            { body: 'B29607BE4B3A4325773076AB7945BD51', headers: { 'Badsec-Authentication-Token' => token } }
+          )
+
+        auth_token = client.get_auth_token
+
+        expect(auth_token).to eq(token)
+      end
+    end
+
+    context "when API raises two errors but succeeds on the next retry" do
+      it 'returns the authentication token from the server response' do
+        stub_request(:get, 'localhost:8888/auth')
+          .to_return(
+            { status: 500, body: 'Internal Server Error' },
+            { status: 404, body: 'Not Found' },
+            { body: 'B29607BE4B3A4325773076AB7945BD51', headers: { 'Badsec-Authentication-Token' => token } }
+          )
+
+        auth_token = client.get_auth_token
+
+        expect(auth_token).to eq(token)
+      end
+    end
+    context "when API raises more than two errors" do
+      it 'fails' do
+        stub_request(:get, 'localhost:8888/auth')
+          .to_return(
+            { status: 500, body: 'Internal Server Error' },
+            { status: 404, body: 'Not Found' },
+            { status: 500, body: 'Internal Server Error' },
+            { body: 'B29607BE4B3A4325773076AB7945BD51', headers: { 'Badsec-Authentication-Token' => token } }
+          )
+
+        expect{ client.get_auth_token }.to raise_error(Client::Error)
+      end
     end
   end
 
