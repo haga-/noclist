@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 require_relative 'client'
 
 client = Client.new
